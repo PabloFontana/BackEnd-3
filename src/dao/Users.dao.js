@@ -1,25 +1,42 @@
-import userModel from "./models/User.js";
+import mongoose from 'mongoose';
 
+const collection = 'Users';
 
-export default class Users {
-    
-    get = (params) =>{
-        return userModel.find(params);
+const schema = new mongoose.Schema({
+    first_name:{
+        type: String,
+        required:true
+    },
+    last_name:{
+        type:String,
+        required:true
+    },
+    email:{
+        type:String,
+        required:true,
+        unique:true
+    },
+    password:{
+        type:String,
+        required:true
+    },
+    role: {
+        type:String,
+        default:'user'
+    },
+    pets:{
+        type:[
+            {
+                _id:{
+                    type:mongoose.SchemaTypes.ObjectId,
+                    ref:'Pets'
+                }
+            }
+        ],
+        default:[]
     }
+})
 
-    getBy = (params) =>{
-        return userModel.findOne(params);
-    }
+const userModel = mongoose.model(collection,schema);
 
-    save = (doc) =>{
-        return userModel.create(doc);
-    }
-
-    update = (id,doc) =>{
-        return userModel.findByIdAndUpdate(id,{$set:doc})
-    }
-
-    delete = (id) =>{
-        return userModel.findByIdAndDelete(id);
-    }
-}
+export default userModel;

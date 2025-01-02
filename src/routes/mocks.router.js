@@ -1,7 +1,7 @@
 import { Router } from "express";
 const router = Router();
 
-import mocksController from "../controllers/mocks.controller";
+import mocksController from "../controllers/mocks.controller.js";
 
 router.get("/mockingpets", mocksController.getMockingPets);
 
