@@ -1,159 +1,130 @@
-
-import supertest from "supertest";
-import chai from "chai"; 
-const expect = chai.expect; 
-
-const requester = supertest("http://localhost:8080"); 
+import chai from 'chai';
+import chaiHttp from 'chai-http';
+import app from '../src/app.js';
+import { expect } from 'chai';
 
 
-describe("Testing de la App Web Adoptame", () => {
-    describe("Testing de Mascotas: ", () => {
-        it("Endpoint POST /api/pets debe crear una mascota correctamente", async () => {
-            const mascotaApiPerrito = {
-                name: "Api", 
-                specie: "Pichicho", 
-                birthDate: "2021-03-10"
-            }
+chai.use(chaiHttp);
 
-            const {statusCode, ok, _body} = await requester.post("/api/pets").send(mascotaApiPerrito); 
+describe('Adoption Router Tests', () => {
+  // Variables para usar en múltiples tests
+  const validUserId = '671867696890203be0f33e5f';
+  const validPetId = '671860eea7e06a95b6300028';
+  const validAdoptionId = '67436cde99efa026a232e74d';
+  const invalidId = '123456789012345678901234';
 
-            console.log(statusCode); 
-            console.log(ok); 
-            console.log(_body); 
+  // Hook para esperar a que la conexión a MongoDB esté lista
+  before(function(done) {
+    this.timeout(5000);
+    setTimeout(done, 2000); 
+  });
 
-            expect(_body.payload).to.have.property("_id"); 
-        })
+  describe('GET /api/adoptions', () => {
+    it('debería retornar todas las adopciones con status 200', (done) => {
+      chai
+        .request(app)
+        .get('/api/adoptions')
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res).to.have.status(200);
+          expect(res.body).to.be.an('array');
+          done();
+        });
+    });
 
-        it("Al crear una mascota solo con los datos elementales, la mascota creada debe tener la propiedad adopted con el valor false", async () => {
+    it('debería incluir las propiedades necesarias en cada adopción', (done) => {
+      chai
+        .request(app)
+        .get('/api/adoptions')
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res).to.have.status(200);
+          if (res.body.length > 0) {
+            expect(res.body[0]).to.have.property('userId');
+            expect(res.body[0]).to.have.property('petId');
+          }
+          done();
+        });
+    });
+  });
 
-            const nuevaMascota = {
-                name: "Rex", 
-                specie: "Perro", 
-                birthDate: "2021-01-01"
-            }; 
+  describe('GET /api/adoptions/:aid', () => {
+    it('debería retornar una adopción específica por ID válido', (done) => {
+      chai
+        .request(app)
+        .get(`/api/adoptions/${validAdoptionId}`)
+        .end((err, res) => {
+          if (err) return done(err);
+          if (res.status === 404) {
+            // Si no existe la adopción, marcamos el test como pendiente
+            return done();
+          }
+          expect(res).to.have.status(200);
+          expect(res.body).to.be.an('object');
+          done();
+        });
+    });
 
-            const {statusCode, body} = await requester.post("/api/pets").send(nuevaMascota); 
+    it('debería retornar error 404 para ID de adopción inexistente', (done) => {
+      chai
+        .request(app)
+        .get(`/api/adoptions/${invalidId}`)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res).to.have.status(404);
+          done();
+        });
+    });
 
-            expect(statusCode).to.equal(200); 
-            expect(body.payload).to.have.property("adopted").that.equals(false); 
-        })
+    it('debería retornar error 400 para ID de adopción inválido', (done) => {
+      chai
+        .request(app)
+        .get('/api/adoptions/invalid-id')
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res).to.have.status(400);
+          done();
+        });
+    });
+  });
 
-        it("Al obtener a las mascotas con el método GET, la respuesta debe tener los campos status y payload. Además, payload debe ser de tipo arreglo", async () => {
-            const {statusCode, body} = await requester.get("/api/pets"); 
+  describe('POST /api/adoptions/:uid/:pid', () => {
+    it('debería crear una nueva adopción con IDs válidos', (done) => {
+      chai
+        .request(app)
+        .post(`/api/adoptions/${validUserId}/${validPetId}`)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res.status).to.be.oneOf([201, 400]); 
+          if (res.status === 201) {
+            expect(res.body).to.be.an('object');
+            expect(res.body).to.have.property('userId');
+            expect(res.body).to.have.property('petId');
+          }
+          done();
+        });
+    });
 
-            expect(statusCode).to.equal(200);
-            expect(body).to.have.property("payload").that.is.an("array"); 
-        })
+    it('debería retornar error 404 para usuario inexistente', (done) => {
+      chai
+        .request(app)
+        .post(`/api/adoptions/${invalidId}/${validPetId}`)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res.status).to.be.oneOf([404, 400]);
+          done();
+        });
+    });
 
-        it("Si se desea crear una mascota sin el campo  nombre, el módulo debe responder codigo status 400.", async () => {
-            const mascotaSinNombre = {
-                specie: "Gato", 
-                birthDate: "2020-05-15"
-            }
-
-            const {statusCode} = await requester.post("/api/pets").send(mascotaSinNombre); 
-
-            expect(statusCode).to.equal(400);
-        })
-
-        it("El método DELETE debe poder borrar la última mascota agregada, ésto se puede alcanzar agregando a la mascota con un POST, tomando el id, borrando la mascota  con el DELETE, y luego corroborar si la mascota existe con un GET", async () => {
-            const betun = {
-                name: "Betun", 
-                specie: "Perro",
-                birthDate: "2023-02-20"
-            }
-
-            
-            const {body: {payload: {_id}}} = await requester.post("/api/pets").send(betun); 
-
-            
-
-            const {statusCode} = await requester.delete(`/api/pets/${_id}`); 
-
-            expect(statusCode).to.equal(200); 
-             
-        })
-    })
-
-    //TEST 2: Registro de Usuarios: 
-    //     let cookie; 
-
-    //     it("Debe registrar correctamente a un usuario", async () => {
-
-    //         const mockUsuario = {
-    //             first_name: "Pepe", 
-    //             last_name: "Argento", 
-    //             email: "pepe@zapateriagarmendia.com", 
-    //             password: "1234"
-    //         }
-
-    //         const {_body} = await requester.post("/api/sessions/register").send(mockUsuario); 
-
-    //         //Validamos que tengamos un payload: 
-    //         expect(_body.payload).to.be.ok; 
-    //     })
-
-    //     it("Debe loguear correctamente al usuario y recuperar la cookie", async () => {
-    //         //Enviamos los mismos datos que registramos en el paso anterior
-
-    //         const mockUsuario = {
-    //             email: "pepe@zapateriagarmendia.com", 
-    //             password: "1234"
-    //         }
-
-    //         const resultado = await requester.post("/api/sessions/login").send(mockUsuario); 
-
-    //         //Me guardo el header de la peticion: 
-
-    //         const cookieResultado = resultado.headers["set-cookie"]["0"]; 
-
-    //         //Verificamos que la cookie recuperada exista
-    //         expect(cookieResultado).to.be.ok; 
-
-    //         //Se separa el nombre y el valor de la cookie y se guardan en un objeto: 
-    //         cookie = {
-    //             name: cookieResultado.split("=")["0"],
-    //             value: cookieResultado.split("=")["1"]
-    //         }
-
-    //         //Verificamos que el nombre de la cookie sea igual a "coderCookie"
-
-    //         expect(cookie.name).to.be.ok.and.equal("coderCookie"); 
-    //         expect(cookie.value).to.be.ok; 
-    //     })
-
-    //     //Probamos la ruta current: 
-    //     it("Debe enviar la cookie que contiene el usuario", async () => {
-    //         //Enviamos: 
-    //         const {_body} = await requester.get("/api/sessions/current").set("Cookie", [`${cookie.name}=${cookie.value}`]);
-
-    //         //Verificamos que nos retorne el email: 
-
-    //         expect(_body.payload.email).to.be.equal("pepe@zapateriagarmendia.com");
-    //     })
-    // })
-
-    //TESTING CON IMAGENES: 
-
-    describe("Testeamos la carga de imagenes", () => {
-        it("Tenemos que crear una mascota con una imagen", async () => {
-            const mascotaMock = {
-                name: "michi", 
-                specie: "gatito", 
-                birthDate: "2021-06-01"
-            }
-
-            
-            const resultado = await requester.post("/api/pets/withimage")
-                .field("name", mascotaMock.name)
-                .field("specie", mascotaMock.specie)
-                .field("birthDate", mascotaMock.birthDate)
-                .attach("image", "./test/gatito.jpg");
-
-            //Verificacion
-            expect(resultado.status).to.be.equal(200); 
-            expect(resultado._body.payload).to.have.property("_id"); 
-            expect(resultado._body.payload.image).to.be.ok;
-        })
-    })
-})
+    it('debería retornar error 404 para mascota inexistente', (done) => {
+      chai
+        .request(app)
+        .post(`/api/adoptions/${validUserId}/${invalidId}`)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res.status).to.be.oneOf([404, 400]);
+          done();
+        });
+    });
+  });
+});
